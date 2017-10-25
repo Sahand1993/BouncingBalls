@@ -16,5 +16,5 @@ class ProximityError(Exception):
 class WallOrientationError(Exception):
 	pass
 
-class TimeError(Exception):
+class NegativeTimeError(Exception):
 	pass

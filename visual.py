@@ -2,10 +2,13 @@ import pygame, sys, os
 from pygame.locals import *
 import model
 import time
-from threading import Thread
+from threading import Thread, Event
 import math
 
 SCREEN_RES = {'width':1300, 'height':800}
+BALL_COLOR = (255,255,255)
+THROTTLE_VALUE = 0.5
+MOVEABLE_COLOR = (123, 0, 233)
 
 pygame.init()
 
@@ -16,13 +19,31 @@ if input("Enter f for FULLSCREEN:") == "f":
 else:
 	screen = pygame.display.set_mode(res)
 
-board = model.boardmodel.Board(**SCREEN_RES)
+class ThrottleThread(Thread):
+	"""Thread class with a stop() method. The thread itself has to check
+	regularly for the stopped() condition."""
+	def __init__(self, kwargs):
+		super(ThrottleThread, self).__init__(kwargs = kwargs)
+		self._stop_event = Event()
 
-color = (255,255,255)
+	def stop(self):
+		self._stop_event.set()
 
-lenne = pygame.image.load("pics/lenne.png")
-lenne = pygame.transform.scale(lenne, (100,100))
-lenne.convert()
+	def stopped(self):
+		return self._stop_event.is_set()
+
+	def run(self):
+		print(self._kwargs)
+		self.throttle_control(**self._kwargs)
+
+	def throttle_control(self, board, delta_vx, delta_vy):
+		while True:
+			board.moveable_ball.throttle(delta_vx, delta_vy)
+			time.sleep(0.1)
+			if self.stopped():
+				break
+
+
 
 def add_balls1(board):
 	board.add_ball(r = 100, x = 900, y = 600, vx = 20, vy = 0, m = 23)
@@ -94,6 +115,8 @@ def add_balls10(board):
 	ball_4 = board.add_ball(r=10, x = 500, y=520, vx = 0, vy=0)
 	ball_5 = board.add_ball(r=10, x=510, y=430, vx=0, vy=1)
 
+	moving_ball = board.add_ball(r=10, x = 30, y = 30, vx = 0, vy = 0, moveable = True)
+
 def add_balls11(board):
 	ball_1 = board.add_ball(r=10, x = 500, y=500, vx=0,vy=0)
 	ball_2 = board.add_ball(r=10, x=520, y=500, vx=0, vy=0)
@@ -131,12 +154,35 @@ def add_balls14(board): # above two separated by 1
 
 	ball_5 = board.add_ball(r=10, x=510, y=430, vx=0, vy=1)	
 
+def add_balls15(board):
+	ball = board.add_ball(r=10, x=500, y=500, vx = 0, vy=0, moveable = True)
+
+def setup_board():
+	board = model.boardmodel.Board(**SCREEN_RES)
+	add_balls10(board)
+	return board
+
+def draw_ball(color, center, radius):
+	pygame.draw.circle(screen, color, center, radius)
+
 def disp_balls(board):
-	balls = board.get_balls_pygame()
+	balls = board.get_non_moveable_balls_graphics()
+
 	for ball in balls:
 		center = (int(ball['x']), int(ball['y']))
 		radius = int(ball['r'])
-		pygame.draw.circle(screen, color, center, radius)
+		draw_ball(BALL_COLOR, center, radius)
+
+	if board.moveable_ball:
+		coords = board.moveable_ball.get_coords_graphics()
+		center = (int(coords["x"]), int(coords["y"]))
+		radius = int(coords["r"])
+		draw_ball(MOVEABLE_COLOR, center, radius)
+
+def load_lenne():
+	lenne = pygame.image.load("pics/lenne.png")
+	lenne = pygame.transform.scale(lenne, (100,100))
+	lenne.convert()
 
 def disp_lenne(board):
 	balls = board.get_balls_pygame()
@@ -145,27 +191,67 @@ def disp_lenne(board):
 		radius = int(ball['r'])
 		screen.blit(lenne, center)
 
+## Thread functions
 def start():
 	while True:
-		time.sleep(0.001)
 		board.step()
+		time.sleep(0.005)
 
-add_balls10(board)
+def check_if_stopped(thread):
+	while True:
+		if thread.stopped():
+
+			break
+
+
+
+
+board = setup_board()
 running = True
-t = Thread(target = start)
+game = Thread(target = start)
 while running:
 	for event in pygame.event.get():
-		if event.type == pygame.QUIT:
+		
+		if event.type == pygame.QUIT: ## elif or not in following clauses?
 			running = False
-		if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+	
+		elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
 			try:
-				t.start()
+				game.start()
 			except ValueError as e:
 				print("Got Error of type "+ str(type(e)) +" and message "+e.message)
-		if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
-			board.step()
+			except RuntimeError:
+				pass
+
+		elif event.type == pygame.KEYDOWN and event.key == pygame.K_UP:
+			throttle_up = ThrottleThread(kwargs = {"board":board, "delta_vx":0, "delta_vy":THROTTLE_VALUE})
+			throttle_up.start()
+		elif event.type == pygame.KEYUP and event.key == pygame.K_UP:
+			if throttle_up:
+				throttle_up.stop()
+
+		elif event.type == pygame.KEYDOWN and event.key == pygame.K_RIGHT:
+			throttle_right = ThrottleThread(kwargs = {"board":board, "delta_vx":THROTTLE_VALUE, "delta_vy":0})
+			throttle_right.start()
+		elif event.type == pygame.KEYUP and event.key == pygame.K_RIGHT:
+			if throttle_right:
+				throttle_right.stop()
+
+		elif event.type == pygame.KEYDOWN and event.key == pygame.K_DOWN:
+			throttle_down = ThrottleThread(kwargs = {"board":board, "delta_vx":0, "delta_vy":-THROTTLE_VALUE})
+			throttle_down.start()			
+		elif event.type == pygame.KEYUP and event.key == pygame.K_DOWN:
+			if throttle_down:
+				throttle_down.stop()
+
+		elif event.type == pygame.KEYDOWN and event.key == pygame.K_LEFT:
+			throttle_left = ThrottleThread(kwargs = {"board":board, "delta_vx":-THROTTLE_VALUE, "delta_vy":0})
+			throttle_left.start()
+		elif event.type == pygame.KEYUP and event.key == pygame.K_LEFT:
+			if throttle_left:
+				throttle_left.stop()
 
 	screen.fill((0,0,0))
-	disp_lenne(board)
+	disp_balls(board)
 	pygame.display.flip()
 

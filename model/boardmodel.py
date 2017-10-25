@@ -5,13 +5,13 @@ from numpy.linalg import norm
 from math import isclose, sqrt
 import time
 
-from model.exceptions.exceptions import ProximityError, OverlapError, ZeroError, ParentError, ArgumentError, WallOrientationError, TimeError
+from model.exceptions.exceptions import ProximityError, OverlapError, ZeroError, ParentError, ArgumentError, WallOrientationError, NegativeTimeError
 
 ERROR_TOL = 1
 
 class Board:
 
-	def __init__(self, width = 100, height = 100, sps = 2, slow = False):
+	def __init__(self, width = 100, height = 100, sps = 2, slow = False, moveable_ball = None):
 		"""A board with (x,y) = (0,0) in the bottom left corner, 
 		like the first quadrant of a coordinate system.
 
@@ -23,8 +23,9 @@ class Board:
 		self.height = height
 		self.sps = 2
 		self.timestep = 1/sps
-		self.balls = set()
-		self.ball_list = [] # Because I wanted to get the balls by order of addition when I was chasing a bug
+		self.all_balls = set() # Used for calculating collisions
+		self.non_moveable_balls = set()
+		self.ball_list = [] # Because I wanted to get the balls by order of addition when I was chasing a bug. Not needed anymore?
 		self.steps = 0 # This is the number of full timesteps taken.
 		self.time_elapsed = 0
 		self.walls = {}
@@ -38,8 +39,10 @@ class Board:
 			self.walls[i+1] = Wall(self, i+1)
 
 		self.slow = slow
+	
+		self.moveable_ball = moveable_ball
 
-	def add_ball(self, vx, vy, r, x = None, y= None, m = 1):
+	def add_ball(self, vx, vy, r, x = None, y = None, m = 1, moveable = False):
 		"""
 		x; position
 		y; position
@@ -54,9 +57,17 @@ class Board:
 
 		if not self.overlap_new_ball(r, x, y):
 			if self.ball_within_walls(r, x, y):
-				ball = Ball(xpos = x, ypos = y, radius = r, vx = vx, vy = vy, mass = m, parent = self)
-				self.balls.add(ball)
-				self.ball_list.append(ball)
+				kwargs = {"parent":self, "xpos":x, "ypos":y, "radius":r, "vx":vx, "vy":vy, "mass":m}
+				if moveable:
+					ball = MoveableBall(**kwargs)
+					self.moveable_ball = ball
+					self.all_balls.add(ball)
+				else:
+					ball = Ball(**kwargs)
+					self.ball_list.append(ball)
+					self.all_balls.add(ball)
+					self.non_moveable_balls.add(ball)
+				
 				return ball
 			else:
 				raise OverlapError("New ball is not within the confines of the board.")
@@ -64,37 +75,36 @@ class Board:
 			raise OverlapError("New ball overlaps with existing ball.")
 
 	def get_ball_list(self):
-		return list(self.balls)
+		return list(self.all_balls)
 
-	def get_balls_pygame(self):
-		"""Returns a list of all ball radiuses, and positions in computer graphics coordinates."""
+	def get_non_moveable_balls_graphics(self):
+		"""Returns a list of all ball radiuses, EXCEPT moveable_ball, and positions in computer graphics coordinates."""
 		return list(map(lambda ball: {
-			'r':round(ball.r),
+			'r': round(ball.r),
 			'x': round(ball.x),
 			'y': round(self.height-ball.y), ## Because the origin is in the upper left corner.
-			}, self.balls))
+			}, self.non_moveable_balls))
 
 	def step(self):
 		"""This is to be executed before each step"""
-		
 		t_total = 0 #Total time progressed during the execution of this function
-		ctr = 0
-		while t_total < self.timestep: ######## SEEMS LIKE ENDLESS LOOP
-			ctr += 1
+		while t_total < self.timestep:
 			substep = self.timestep - t_total # Time that's left of timestep in current timestep
 			contacts = self.first_contacts(substep) # get the balls that are touching in the first collision. contacts = {'time':time, 'collidors':[(ball_1,wall),(ball_1,ball_2),...]}
 			if self.slow:
 				time.sleep(1)
 
-
 			if not contacts: # If we have no collisions during substep
 				self.progress_balls(substep)
+				self.moveable_ball.add_to_last_trail("No collisions. {0} left of timestep".format(substep)) # FOR TESTING ONLY
+				t_total += substep # testing. necessary?
 				break
 
 			delta_t = contacts['time']
 
 			if t_total + delta_t >= self.timestep: ## When we've gone over our timestep, we must progress all balls to the end of timestep, because no more collisions will take place inside of timestep.
 				self.progress_balls(substep)
+				t_total += substep # testing. necessary?
 				break
 			else:
 				self.progress_balls(delta_t)
@@ -140,7 +150,7 @@ class Board:
 		
 		first_ball_contacts = {'time': timestep, 'collidors': []} # collidors will be Ball
 		
-		for ball_1, ball_2 in itertools.combinations(self.balls, 2):
+		for ball_1, ball_2 in itertools.combinations(self.all_balls, 2):
 			
 			t = self.collision_time(ball_1, ball_2, timestep)
 			if t!=None:
@@ -161,12 +171,11 @@ class Board:
 	def first_wall_contacts(self, timestep):
 		"""Returns the time, ball_1 and ball_2 of the first ball-wall collision within the timestep. 
 		Returns None if there is no contact."""
-		
 		#Find the first collision with a ball and a wall.
 		first_wall_contacts = {'time': timestep, 'collidors': []} # Collidors will be Ball and Wall
 
 		#For the balls that have a positive vy
-		for ball in filter(lambda x: x.vy>0, self.balls):
+		for ball in filter(lambda ball: ball.vy>0, self.all_balls):
 			t = self.time_to_y(ball, self.height-ball.r)
 			if t < first_wall_contacts['time']: 
 				first_wall_contacts['time'] = t
@@ -175,7 +184,7 @@ class Board:
 				first_wall_contacts['collidors'].append((ball, self.walls[1]))
 
 		#For the balls that have a positive vx
-		for ball in filter(lambda x: x.vx>0, self.balls):
+		for ball in filter(lambda ball: ball.vx>0, self.all_balls):
 			t = self.time_to_x(ball, self.width-ball.r)
 			if t < first_wall_contacts['time']: 
 				first_wall_contacts['time'] = t
@@ -184,7 +193,7 @@ class Board:
 				first_wall_contacts['collidors'].append((ball, self.walls[2]))
 
 		#For the balls that have a negative vy
-		for ball in filter(lambda x: x.vy<0, self.balls):
+		for ball in filter(lambda ball: ball.vy<0, self.all_balls):
 			t = self.time_to_y(ball, 0+ball.r)
 			if t < first_wall_contacts['time']: 
 				first_wall_contacts['time'] = t
@@ -193,7 +202,7 @@ class Board:
 				first_wall_contacts['collidors'].append((ball, self.walls[3]))
 
 		#For the balls that have negative vx
-		for ball in filter(lambda x: x.vx<0, self.balls):
+		for ball in filter(lambda ball: ball.vx<0, self.all_balls):
 			t = self.time_to_x(ball, 0+ball.r)
 			if t < first_wall_contacts['time']: 
 				first_wall_contacts['time'] = t
@@ -207,24 +216,23 @@ class Board:
 		return first_wall_contacts
 
 	def progress_balls(self, time):
-		for ball in self.balls:
-			self.progress_ball(ball, time)
+		for ball in self.all_balls:
+			ball.progress_ball(time)
+		self.moveable_ball.edit_trail()
 		self.time_elapsed += time
-
-	def progress_ball(self, ball, time): # time is not necessarily timestep
-		ball.x = ball.x + ball.vx*time
-		ball.y = ball.y + ball.vy*time
 
 	def time_to_x(self, ball, x):
 		t = (x-ball.x)/ball.vx
 		if t < 0:
-			raise NegativeTimeError('function returned a negative time')
+			if not isclose(t, 0, abs_tol = 0.01):
+				raise NegativeTimeError('function returned a negative time')
 		return t
 
 	def time_to_y(self, ball, y):
 		t = (y-ball.y)/ball.vy
 		if t < 0:
-			raise NegativeTimeError('function returned a negative time')
+			if not isclose(t, 0, abs_tol = 0.01):
+				raise NegativeTimeError('function returned a negative time. \ny = {0} \nball.y = {1} \nball_vy = {2} \nball.r = {3} \nboard.height = {4}\n Last ball positions:\n{5}'.format(y, ball.y, ball.vy, ball.r, self.height, ball.trail))
 		return t
 
 	def collision_time(self, ball_1, ball_2, time):
@@ -241,7 +249,6 @@ class Board:
 	def d_min(self, ball_1, ball_2):
 		"""Returns the smallest distance between 
 		ball_1 and ball_2 from now (0) to self.timestep"""
-
 		delta_x = ball_1.x - ball_2.x
 		delta_y = ball_1.y - ball_2.y # delta_x and delta_y are at the start, before the timestep.
 		delta_vx = ball_1.vx - ball_2.vx
@@ -260,7 +267,6 @@ class Board:
 		"""Returns the time of collision, if there is one, None if not.
 		ball_1 and ball_2 should hold the x and y values for the beginning of the timestep
 		when the function is called."""
-
 		d = ball_1.r + ball_2.r
 		k = ((ball_1.vy-ball_2.vy)**2+(ball_1.vx-ball_2.vx)**2) ## ball_1 == ball_2??
 		l = 2*((ball_1.y-ball_2.y)*(ball_1.vy-ball_2.vy)+(ball_1.x-ball_2.x)*(ball_1.vx-ball_2.vx))
@@ -292,11 +298,11 @@ class Board:
 
 		return None
 
-	def stop(self):
-		pass
+	# def stop(self):
+	# 	pass
 
-	def start(self):
-		pass
+	# def start(self):
+	# 	pass
 
 	def ball_within_walls(self, r, x, y):
 		if x+r <= self.width and y+r <= self.height and x-r >= 0 and y-r >= 0:
@@ -307,7 +313,7 @@ class Board:
 		"""	Takes a ball and returns true if its area overlaps 
 			with any other ball currently on the board
 		"""
-		for ball in self.balls:
+		for ball in self.all_balls:
 			
 			delta_vector = subtract([new_x,new_y], [ball.x, ball.y])
 			distance = norm(delta_vector)
@@ -320,7 +326,7 @@ class Board:
 
 	def check_board_for_overlap(self):
 		"""Raises an exception if any balls overlap on the board"""
-		for ball_1, ball_2 in combinations(self.balls, 2):
+		for ball_1, ball_2 in combinations(self.all_balls, 2):
 			if norm([ball_1.x-ball_2.x, ball_1.y-ball_2.y]) < ball_1.radius + ball_2.radius:
 				raise OverlapError
 
@@ -347,6 +353,7 @@ class Ball:
 		self.vy = vy
 		self.mass = mass
 		self.board = parent
+		self.trail = "self.r = {0}".format(radius)
 
 	def __str__(self):
 		return self._str__()
@@ -359,6 +366,10 @@ class Ball:
 	def override_str(self, func): ## Needs testing
 		self.__str__ = func	
 
+	def progress_ball(self, time): # time is not necessarily timestep
+		self.x = self.x + self.vx*time
+		self.y = self.y + self.vy*time
+
 	def collide(self, other):
 		if isinstance(other, Wall):
 			self.collide_with_wall(other)
@@ -368,7 +379,6 @@ class Ball:
 			raise ArgumentError("Invalid type for argument 'other': "+str(type(other)))
 
 	def collide_with_wall(self, wall):
-
 		x = self.x 
 		y = self.y # Coordinates of the ball
 
@@ -398,7 +408,6 @@ class Ball:
 
 	def vxy_to_vnt(self, other_ball):
 		"""Take a vector (x,y) and transforms it to (n,t)-base for the touching point of self and other_ball."""
-
 		r1 = self.r
 		r2 = other_ball.r
 
@@ -474,7 +483,6 @@ class Ball:
 
 	def old_collide_with_ball(self, other_ball): ## IS NOT USED ANYMORE
 		"""changes the velocities for self and other_ball in a collision. Must only be run on touching balls."""
-		
 		if self.derivative(other_ball)>0: # If the derivative of the distance between 
 			return 						  # the centers of gravity at the time of 
 										  # contact is positive, the balls are
@@ -581,13 +589,29 @@ class Ball:
 
 		return d_prime
 
+	def edit_trail(self):
+		self.trail += "\nself.x = {0}\tself.y = {1}\tself.vx = {2}\tself.vy = {3}".format(self.x, self.y, self.vx, self.vy)
+		lines = self.trail.split("\n")
+		length = len(lines)
+		if length > 4:
+			remove = length-4
+			lines = lines[remove:length]
+			self.trail = "\n".join(lines)
+	def add_to_last_trail(self, s):
+		"""Adds string s to last row in self.trail"""
+		self.trail += "\t{0}".format(s)
+
 class MoveableBall(Ball):
-	def __init__(self, parent, xpos = 50, ypos = 50, radius = 100, vx = 0, vy = 0, mass = 1, delta_vx = 0, delta_vy = 0):
-		super().__init__(self, parent, xpos = 50, ypos = 50, radius = 100, vx = 0, vy = 0, mass = 1)
-		self.delta_vx = delta_vx # This is the value that will be added to vx in the next timestep
-		self.delta_vy = delta_vy # dito for vy
 
-
+	def throttle(self, delta_vx, delta_vy):
+		"""
+		Make ball accelerate.
+		"""
+		self.vx = self.vx + delta_vx
+		self.vy = self.vy + delta_vy
+	def get_coords_graphics(self):
+		""" Returns coordinates and radius of ball in a computer graphics coordinate system. """
+		return {"x": self.x, "y": self.board.height-self.y, "r": self.r}
 
 class Wall():
 	def __init__(self, parent, orientation):
@@ -627,26 +651,3 @@ class Wall():
 		return "Wall "+str(self.orientation)
 	
 	__repr__ = __str__
-
-class Coords():
-	def __init__(self, x, y):
-		self.x = x
-		self.y = y
-
-class Collisions(): ## Seems useless as of now
-	"""Meant to store a group of objects that will collide at the same time, 
-	in pairs, and return them one by one for Board to call collision for 
-	them. The iterable should give each successive pair of colliding objects 
-	that the new speeds should be calculated for."""
-	def __init__(self, colliding_balls):
-		self.ball_pairs = colliding_balls
-		self.started = False
-	def order(self):
-		dict = {}
-	def __iter__(self):
-		self.order()
-		yield self.ball_pair[0]
-		if self.started:
-			pass
-		else:
-			pass
