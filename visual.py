@@ -29,8 +29,8 @@ elif sys.version_info.major == 2:
 class ThrottleThread(Thread):
 	"""Thread class with a stop() method. The thread itself has to check
 	regularly for the stopped() condition."""
-	def __init__(self, kwargs):
-		super(ThrottleThread, self).__init__(kwargs = kwargs)
+	def __init__(self, kwargs, daemon):
+		super(ThrottleThread, self).__init__(kwargs = kwargs, daemon = daemon)
 		self._stop_event = Event()
 
 	def stop(self):
@@ -218,7 +218,7 @@ def check_if_stopped(thread):
 
 board = setup_board()
 running = True
-game = Thread(target = start)
+game = Thread(target = start, daemon=True)
 while running:
 	for event in pygame.event.get():
 		
@@ -226,7 +226,8 @@ while running:
 			running = False
 		elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
 			running = False
-			pygame.QUIT()
+			pygame.quit()
+			sys.exit()
 	
 		elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
 			try:
@@ -237,28 +238,28 @@ while running:
 				pass
 
 		elif event.type == pygame.KEYDOWN and event.key == pygame.K_UP:
-			throttle_up = ThrottleThread(kwargs = {"board":board, "delta_vx":0, "delta_vy":THROTTLE_VALUE})
+			throttle_up = ThrottleThread(kwargs = {"board":board, "delta_vx":0, "delta_vy":THROTTLE_VALUE}, daemon = True)
 			throttle_up.start()
 		elif event.type == pygame.KEYUP and event.key == pygame.K_UP:
 			if throttle_up:
 				throttle_up.stop()
 
 		elif event.type == pygame.KEYDOWN and event.key == pygame.K_RIGHT:
-			throttle_right = ThrottleThread(kwargs = {"board":board, "delta_vx":THROTTLE_VALUE, "delta_vy":0})
+			throttle_right = ThrottleThread(kwargs = {"board":board, "delta_vx":THROTTLE_VALUE, "delta_vy":0}, daemon = True)
 			throttle_right.start()
 		elif event.type == pygame.KEYUP and event.key == pygame.K_RIGHT:
 			if throttle_right:
 				throttle_right.stop()
 
 		elif event.type == pygame.KEYDOWN and event.key == pygame.K_DOWN:
-			throttle_down = ThrottleThread(kwargs = {"board":board, "delta_vx":0, "delta_vy":-THROTTLE_VALUE})
+			throttle_down = ThrottleThread(kwargs = {"board":board, "delta_vx":0, "delta_vy":-THROTTLE_VALUE}, daemon = True)
 			throttle_down.start()			
 		elif event.type == pygame.KEYUP and event.key == pygame.K_DOWN:
 			if throttle_down:
 				throttle_down.stop()
 
 		elif event.type == pygame.KEYDOWN and event.key == pygame.K_LEFT:
-			throttle_left = ThrottleThread(kwargs = {"board":board, "delta_vx":-THROTTLE_VALUE, "delta_vy":0})
+			throttle_left = ThrottleThread(kwargs = {"board":board, "delta_vx":-THROTTLE_VALUE, "delta_vy":0}, daemon = True)
 			throttle_left.start()
 		elif event.type == pygame.KEYUP and event.key == pygame.K_LEFT:
 			if throttle_left:
