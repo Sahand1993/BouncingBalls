@@ -1,8 +1,8 @@
 import numpy as np
 import itertools
-from numpy import subtract
+from numpy import subtract, isclose
 from numpy.linalg import norm
-from math import isclose, sqrt
+from math import sqrt
 import time
 
 from model.exceptions.exceptions import ProximityError, OverlapError, ZeroError, ParentError, ArgumentError, WallOrientationError, NegativeTimeError
@@ -224,14 +224,14 @@ class Board:
 	def time_to_x(self, ball, x):
 		t = (x-ball.x)/ball.vx
 		if t < 0:
-			if not isclose(t, 0, abs_tol = 0.01):
+			if not isclose(t, 0, atol = 0.01):
 				raise NegativeTimeError('function returned a negative time')
 		return t
 
 	def time_to_y(self, ball, y):
 		t = (y-ball.y)/ball.vy
 		if t < 0:
-			if not isclose(t, 0, abs_tol = 0.01):
+			if not isclose(t, 0, atol = 0.01):
 				raise NegativeTimeError('function returned a negative time. \ny = {0} \nball.y = {1} \nball_vy = {2} \nball.r = {3} \nboard.height = {4}\n Last ball positions:\n{5}'.format(y, ball.y, ball.vy, ball.r, self.height, ball.trail))
 		return t
 
@@ -286,7 +286,7 @@ class Board:
 		if t_collision:
 			min_t = min(t_collision)
 
-			if isclose(min_t, 0, abs_tol = 0.003):
+			if isclose(min_t, 0, atol = 0.003):
 				v1 = ball_1.vxy_to_vnt(ball_2)
 				v2 = ball_2.vxy_to_vnt(ball_1)
 				v1_normal = v1[0]
@@ -398,10 +398,10 @@ class Ball:
 			raise WallOrientationError('wall.orientation is holding an invalid value: '+str(wall.orientation))
 
 		switch = {
-			1 : 'self.vy = -self.vy' if isclose(y+self.r, self.board.height, abs_tol= ERROR_TOL) else 'raise ProximityError("The absolute value of the distance between ball and wall is too great, error = "+str(y+self.r - self.board.height))',
-			2 : 'self.vx = -self.vx' if isclose(x+self.r, self.board.width, abs_tol=ERROR_TOL) else 'raise ProximityError("The absolute value of the distance between ball and wall is too great, error = "+str(y+self.r - self.board.height))',
-			3 : 'self.vy = -self.vy' if isclose(y-self.r, 0, abs_tol=ERROR_TOL) else 'raise ProximityError("The absolute value of the distance between ball and wall is too great, error = "+str(y+self.r - self.board.height))',
-			4 : 'self.vx = -self.vx' if isclose(x-self.r, 0, abs_tol=ERROR_TOL) else 'raise ProximityError("The absolute value of the distance between ball and wall is too great, error = "+str(y+self.r - self.board.height))',
+			1 : 'self.vy = -self.vy' if isclose(y+self.r, self.board.height, atol= ERROR_TOL) else 'raise ProximityError("The absolute value of the distance between ball and wall is too great, error = "+str(y+self.r - self.board.height))',
+			2 : 'self.vx = -self.vx' if isclose(x+self.r, self.board.width, atol=ERROR_TOL) else 'raise ProximityError("The absolute value of the distance between ball and wall is too great, error = "+str(y+self.r - self.board.height))',
+			3 : 'self.vy = -self.vy' if isclose(y-self.r, 0, atol=ERROR_TOL) else 'raise ProximityError("The absolute value of the distance between ball and wall is too great, error = "+str(y+self.r - self.board.height))',
+			4 : 'self.vx = -self.vx' if isclose(x-self.r, 0, atol=ERROR_TOL) else 'raise ProximityError("The absolute value of the distance between ball and wall is too great, error = "+str(y+self.r - self.board.height))',
 		}
 
 		exec(switch.get(wall.orientation))
@@ -411,7 +411,7 @@ class Ball:
 		r1 = self.r
 		r2 = other_ball.r
 
-		if not isclose(self.distance_to(other_ball), r1+r2, abs_tol = ERROR_TOL):
+		if not isclose(self.distance_to(other_ball), r1+r2, atol = ERROR_TOL):
 			raise ProximityError("The absolute value of the distance between the two balls is greater than allowed by 'collision()'")
 
 		x2 = other_ball.x 	## In the moment of collision
@@ -435,7 +435,7 @@ class Ball:
 		r1 = self.r
 		r2 = other_ball.r
 
-		if not isclose(self.distance_to(other_ball), r1+r2, abs_tol = ERROR_TOL):
+		if not isclose(self.distance_to(other_ball), r1+r2, atol = ERROR_TOL):
 			raise ProximityError("The absolute value of the distance between the two balls is greater than allowed.")
 
 		if self.derivative(other_ball)>=0: # If the derivative of the distance between 
@@ -491,7 +491,7 @@ class Ball:
 		r1 = self.r
 		r2 = other_ball.r
 
-		if not isclose(self.distance_to(other_ball), r1+r2, abs_tol = ERROR_TOL):
+		if not isclose(self.distance_to(other_ball), r1+r2, atol = ERROR_TOL):
 			raise ProximityError("The absolute value of the distance between the two balls is greater than allowed by 'collision()'")
 
 		x2 = other_ball.x 	## In the moment of collision

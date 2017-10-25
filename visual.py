@@ -14,10 +14,17 @@ pygame.init()
 
 res = tuple(SCREEN_RES.values())
 
-if input("Enter f for FULLSCREEN:") == "f":
-	screen = pygame.display.set_mode(res, FULLSCREEN)
-else:
-	screen = pygame.display.set_mode(res)
+if sys.version_info.major == 3:
+	if input("Enter f for fullscreen:") == "f":
+		screen = pygame.display.set_mode(res, FULLSCREEN)
+	else:
+		screen = pygame.display.set_mode(res)
+elif sys.version_info.major == 2:
+	if raw_input("Enter f for fullscreen:") == "f":
+		screen = pygame.display.set_mode(res, FULLSCREEN)
+	else:
+		screen = pygame.display.set_mode(res)
+
 
 class ThrottleThread(Thread):
 	"""Thread class with a stop() method. The thread itself has to check
@@ -33,7 +40,11 @@ class ThrottleThread(Thread):
 		return self._stop_event.is_set()
 
 	def run(self):
-		self.throttle_control(**self._kwargs)
+		if sys.version_info.major == 3:
+			kwargs = self._kwargs
+		elif sys.version_info.major == 2:
+			kwargs = self.__kwargs
+		self.throttle_control(**kwargs)
 
 	def throttle_control(self, board, delta_vx, delta_vy):
 		while True:
@@ -72,7 +83,7 @@ def add_balls6(board):
 	ball_1 = board.add_ball(r = 5, x = 50, y = 55, vx = 0, vy = -1, m = 1)
 	ball_2 = board.add_ball(r = 5, x = 50, y = 45, vx = 0, vy = 1, m = 1)
 
-def add_balls7(board): #Buggar för width = 1100, height = 800
+def add_balls7(board): 
 	ball_1 = board.add_ball(r = 40, x = 900, y = 750, vx = 0, vy = -1, m = 1)
 	ball_2 = board.add_ball(r = 5, x = 700, y = 700, vx = 0, vy = 1, m = 1)	
 	ball_3 = board.add_ball(r = 50, x = 500, y = 500, vx = 5, vy = 3, m = 100)
@@ -96,7 +107,7 @@ def add_balls8(board):
 	ball_5 = board.add_ball(r=10, x=510, y=481, vx=0, vy=1)
 	ball_6 = board.add_ball(r=100, x=600, y= 200, vx=2, vy=0, m=100)
 
-def add_balls9(board): #buggar för width = 1300, height = 800
+def add_balls9(board): 
 	ball_1 = board.add_ball(r=10, x = 500, y=500, vx=0,vy=0)
 	ball_2 = board.add_ball(r=10, x=520, y=500, vx=0, vy=0)
 	ball_3 = board.add_ball(r=10, x = 520, y=520, vx=0,vy=0)
@@ -144,7 +155,7 @@ def add_balls13(board):
 	ball_4 = board.add_ball(r=10, x=500, y=400, vx=0, vy=1)
 
 
-def add_balls14(board): # above two separated by 1
+def add_balls14(board):
 	ball_1 = board.add_ball(r=10, x = 500, y=500, vx=0,vy=0)
 	ball_2 = board.add_ball(r=10, x=520, y=500, vx=0, vy=0)
 
@@ -211,7 +222,7 @@ game = Thread(target = start)
 while running:
 	for event in pygame.event.get():
 		
-		if event.type == pygame.QUIT: ## elif or not in following clauses?
+		if event.type == pygame.QUIT: 
 			running = False
 	
 		elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
