@@ -33,7 +33,6 @@ class ThrottleThread(Thread):
 		return self._stop_event.is_set()
 
 	def run(self):
-		print(self._kwargs)
 		self.throttle_control(**self._kwargs)
 
 	def throttle_control(self, board, delta_vx, delta_vy):
