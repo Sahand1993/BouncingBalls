@@ -224,6 +224,9 @@ while running:
 		
 		if event.type == pygame.QUIT: 
 			running = False
+		elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+			running = False
+			pygame.QUIT()
 	
 		elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
 			try:
