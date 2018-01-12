@@ -125,7 +125,7 @@ def add_balls10(board):
 	ball_4 = board.add_ball(r=10, x = 500, y=520, vx = 0, vy=0)
 	ball_5 = board.add_ball(r=10, x=510, y=430, vx=0, vy=1)
 
-	moving_ball = board.add_ball(r=10, x = 30, y = 30, vx = 0, vy = 0, moveable = True)
+	moving_ball = board.add_ball(r=20, x = 30, y = 30, vx = 0, vy = 0, m = 100, moveable = True)
 
 def add_balls11(board):
 	ball_1 = board.add_ball(r=10, x = 500, y=500, vx=0,vy=0)
